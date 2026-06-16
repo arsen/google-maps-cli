@@ -7,6 +7,7 @@
 // We extract the business name, the place coordinates, and the hex "feature
 // id" so a downstream lookup (Places API text search) can resolve the
 // canonical place_id.
+import { searchPlaces } from "./places";
 
 export interface ParsedMapsUrl {
   // The decoded business / place name, if present in the URL path.
@@ -78,4 +79,35 @@ export function parseMapsUrl(url: string): ParsedMapsUrl {
   }
 
   return result;
+}
+
+// Resolve the canonical Google place_id for a (possibly shortened) Google Maps
+// place URL: expand short links, parse out the name/location, then run a Places
+// API text search biased to the parsed coordinates.
+export async function resolvePlaceIdFromUrl(
+  apiKey: string,
+  rawUrl: string,
+): Promise<string> {
+  const resolvedUrl = await resolveMapsUrl(rawUrl);
+  const parsed = parseMapsUrl(resolvedUrl);
+
+  if (!parsed.name) {
+    throw new Error(
+      "Could not find a business name in the URL. Make sure it is a Google Maps place URL.",
+    );
+  }
+
+  const location =
+    parsed.latitude !== undefined && parsed.longitude !== undefined
+      ? { latitude: parsed.latitude, longitude: parsed.longitude }
+      : undefined;
+
+  const places = await searchPlaces({ apiKey, query: parsed.name, location });
+
+  const place = places[0];
+  if (!place) {
+    throw new Error(`No place found for "${parsed.name}".`);
+  }
+
+  return place.id;
 }

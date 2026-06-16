@@ -18,6 +18,7 @@ src/
     place-id.ts       # `gmaps place-id` (resolve place_id from a URL)
     place-details.ts  # `gmaps place-details` (full details for a place_id)
     download-place-photos.ts  # `gmaps download-place-photos` (save photos)
+    dump.ts           # `gmaps dump` (URL -> ABOUT.md + photos/ folder)
   lib/
     config.ts         # ~/.google-maps-cli paths
     credentials.ts    # credential schema + load/save/clear (0600)
@@ -228,3 +229,42 @@ If neither `--max-width` nor `--max-height` is given, photos default to a max
 width of 1600px. Files are named `<place-name-slug>-NN.<ext>` (extension
 derived from the response content type). Each saved file path is printed to
 stdout so the output can be piped; progress and a final summary go to stderr.
+
+### `gmaps dump [url]`
+
+One-shot export of everything known about a place into a folder, designed to be
+fed to an AI agent. Given a Google Maps URL, it resolves the `place_id`, fetches
+the full place details, and writes:
+
+- `ABOUT.md` — a Markdown summary of the place (name, type, overview, contact,
+  rating, opening hours, up to five reviews, and a gallery linking the photos).
+- `photos/` — the place's photos downloaded as image files, referenced from
+  `ABOUT.md`.
+
+The URL can be passed as an argument or pasted when prompted; shortened
+`maps.app.goo.gl` links are expanded automatically.
+
+```sh
+gmaps dump "https://maps.app.goo.gl/abc123" -o ./blue-bottle
+gmaps dump "https://maps.app.goo.gl/abc123" -o ./blue-bottle --max-width 1200 -n 5
+```
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+| `-o, --output <dir>` | Directory to write the dump into (created if missing). Default: `.` |
+| `--max-width <px>` | Max photo width in pixels (1–4800). |
+| `--max-height <px>` | Max photo height in pixels (1–4800). |
+| `-n, --limit <count>` | Maximum number of photos to download. |
+
+Resulting layout:
+
+```
+<output>/
+  ABOUT.md
+  photos/
+    <place-name-slug>-01.jpg
+    <place-name-slug>-02.jpg
+    ...
+```

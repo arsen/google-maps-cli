@@ -1,8 +1,7 @@
 import type { Command } from "commander";
 import { input } from "@inquirer/prompts";
 import { loadCredentials } from "../lib/credentials";
-import { parseMapsUrl, resolveMapsUrl } from "../lib/maps-url";
-import { searchPlaces } from "../lib/places";
+import { resolvePlaceIdFromUrl } from "../lib/maps-url";
 
 export function registerPlaceId(program: Command): void {
   program
@@ -30,32 +29,9 @@ export function registerPlaceId(program: Command): void {
         throw new Error("A Google Maps URL is required.");
       }
 
-      const resolvedUrl = await resolveMapsUrl(rawUrl);
-      const parsed = parseMapsUrl(resolvedUrl);
-
-      if (!parsed.name) {
-        throw new Error(
-          "Could not find a business name in the URL. Make sure it is a Google Maps place URL.",
-        );
-      }
-
-      const location =
-        parsed.latitude !== undefined && parsed.longitude !== undefined
-          ? { latitude: parsed.latitude, longitude: parsed.longitude }
-          : undefined;
-
-      const places = await searchPlaces({
-        apiKey: credentials.apiKey,
-        query: parsed.name,
-        location,
-      });
-
-      const place = places[0];
-      if (!place) {
-        throw new Error(`No place found for "${parsed.name}".`);
-      }
+      const placeId = await resolvePlaceIdFromUrl(credentials.apiKey, rawUrl);
 
       // Output only the bare place_id so it can be captured directly.
-      console.log(place.id);
+      console.log(placeId);
     });
 }
