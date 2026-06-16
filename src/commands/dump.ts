@@ -169,6 +169,8 @@ function buildAboutMarkdown(
   }
 
   if (place.editorialSummary?.text) {
+    lines.push("## About");
+    lines.push("");
     lines.push(place.editorialSummary.text);
     lines.push("");
   }
