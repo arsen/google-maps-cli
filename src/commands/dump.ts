@@ -24,38 +24,49 @@ export function registerDump(program: Command): void {
   program
     .command("dump")
     .description(
-      "Resolve a Google Maps URL, write an ABOUT.md, and download its photos.",
+      "Dump a place by Google Maps URL or place_id: write an ABOUT.md and download its photos.",
     )
-    .argument("[url]", "Google Maps place URL (prompted for if omitted)")
+    .argument(
+      "[url-or-place-id]",
+      "Google Maps place URL or a place_id (prompted for if omitted)",
+    )
     .option("-o, --output <dir>", "directory to write the dump into", ".")
     .option("--max-width <px>", "max photo width in pixels (1-4800)")
     .option("--max-height <px>", "max photo height in pixels (1-4800)")
     .option("-n, --limit <count>", "maximum number of photos to download")
-    .action(async (url: string | undefined, options: DumpOptions) => {
+    .action(async (urlOrPlaceId: string | undefined, options: DumpOptions) => {
       const credentials = await loadCredentials();
       if (!credentials) {
         throw new Error('No credentials found. Run "gmaps init" first.');
       }
 
-      const rawUrl = (
-        url ??
+      const rawInput = (
+        urlOrPlaceId ??
         (await input({
-          message: "Paste the Google Maps URL:",
+          message: "Paste a Google Maps URL or place_id:",
           validate: (value) =>
-            value.trim().length > 0 ? true : "A URL is required.",
+            value.trim().length > 0
+              ? true
+              : "A Google Maps URL or place_id is required.",
         }))
       ).trim();
 
-      if (rawUrl.length === 0) {
-        throw new Error("A Google Maps URL is required.");
+      if (rawInput.length === 0) {
+        throw new Error("A Google Maps URL or place_id is required.");
       }
 
       const maxWidthPx = parsePixels(options.maxWidth, "--max-width");
       const maxHeightPx = parsePixels(options.maxHeight, "--max-height");
       const limit = parseLimit(options.limit);
 
-      logger.info("Resolving place_id from URL…");
-      const placeId = await resolvePlaceIdFromUrl(credentials.apiKey, rawUrl);
+      let placeId: string;
+      if (looksLikeUrl(rawInput)) {
+        logger.info("Resolving place_id from URL…");
+        placeId = await resolvePlaceIdFromUrl(credentials.apiKey, rawInput);
+      } else {
+        logger.info(`Using provided place_id "${rawInput}"…`);
+        placeId = rawInput;
+      }
 
       const { place } = await getPlaceDetails({
         apiKey: credentials.apiKey,
@@ -77,7 +88,10 @@ export function registerDump(program: Command): void {
       });
 
       const aboutPath = join(outputDir, "ABOUT.md");
-      const markdown = buildAboutMarkdown(place, rawUrl, photoFiles);
+      const sourceUrl = looksLikeUrl(rawInput)
+        ? rawInput
+        : place.googleMapsUri ?? rawInput;
+      const markdown = buildAboutMarkdown(place, sourceUrl, photoFiles);
       await writeFile(aboutPath, markdown, "utf8");
       logger.success(`Wrote ${aboutPath}`);
 
@@ -303,6 +317,17 @@ function formatPriceLevel(level: string | undefined): string | undefined {
 // Escape characters that would break a Markdown table cell.
 function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+// Treat the input as a URL when it parses as one with an http(s) protocol.
+// Anything else is assumed to be a Google place_id.
+function looksLikeUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function parsePixels(value: string | undefined, flag: string): number | undefined {
